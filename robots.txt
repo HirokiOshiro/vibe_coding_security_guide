@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://hirokioshiro.github.io/vibe_coding_security_guide/sitemap.xml

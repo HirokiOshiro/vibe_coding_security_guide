@@ -1,0 +1,1224 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none';">
+<meta http-equiv="X-Content-Type-Options" content="nosniff">
+<meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+<title>Vibe Coding Security Guide — AIと安全にコードを書くために知るべきこと</title>
+<meta name="description" content="バイブコーディング・AIエージェント時代のセキュリティと環境設定を、非エンジニア向けに整理した学習ガイド。OWASP Top 10、IPA安全なWebサイトの作り方を中心に解説。">
+<meta name="theme-color" content="#1a1a1a">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="ja_JP">
+<meta property="og:title" content="Vibe Coding Security Guide — AIと安全にコードを書くために知るべきこと">
+<meta property="og:description" content="バイブコーディング・AIエージェント時代のセキュリティと環境設定の学習ガイド。">
+<meta property="og:site_name" content="Vibe Coding Security Guide">
+<meta property="og:url" content="https://hirokioshiro.github.io/vibe_coding_security_guide/">
+<meta name="twitter:card" content="summary">
+<link rel="canonical" href="https://hirokioshiro.github.io/vibe_coding_security_guide/">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%9B%A1%EF%B8%8F%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700;900&family=Noto+Serif+JP:wght@400;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+
+<!-- ═══════════════ Hero ═══════════════ -->
+<header class="hero">
+  <div class="hero-inner">
+    <div class="hero-tag">Vibe Coding Security Guide</div>
+    <h1>AIと安全にコードを書くために<br><em>知るべきこと</em></h1>
+    <p class="hero-desc">
+      生成AIにコードを任せる時代に必要なセキュリティと環境設定の学習ガイド。<br>
+      OWASP Top 10、IPA「安全なウェブサイトの作り方」を中心に、<br>
+      AIコード生成・AIエージェント活用に潜むリスクと具体的な対策を非エンジニア向けに整理。
+    </p>
+    <div class="sibling-link">
+      関連ガイド: <a href="https://hirokioshiro.github.io/vibe_coding_preflight_guide/">&#x1F9ED; Vibe Coding Preflight Guide — コードを書く前に考えるべきこと</a>
+    </div>
+  </div>
+</header>
+
+<!-- ═══════════════ TOC ═══════════════ -->
+<nav class="toc-bar">
+  <div class="toc-inner">
+    <a href="#why" class="toc-link">なぜ必要か</a>
+    <a href="#ai-risk" class="toc-link">AIコードのリスク</a>
+    <a href="#secrets" class="toc-link">シークレット管理</a>
+    <a href="#ai-input" class="toc-link">AIに渡す情報</a>
+    <a href="#supply-chain" class="toc-link">サプライチェーン</a>
+    <a href="#mcp" class="toc-link">MCP</a>
+    <a href="#dev-env" class="toc-link">開発環境</a>
+    <a href="#review" class="toc-link">コードレビュー</a>
+    <a href="#checklist" class="toc-link">チェックリスト</a>
+    <a href="#keywords" class="toc-link">用語索引</a>
+  </div>
+</nav>
+
+<main class="main">
+
+<!-- ═══════════════ Section: Why ═══════════════ -->
+<section class="section" id="why">
+  <div class="section-num">INTRODUCTION</div>
+  <h2>なぜセキュリティを学ぶ必要があるのか</h2>
+  <p class="section-subtitle">「動いた」と「安全」の間にある、見えない深い溝について</p>
+
+  <div class="epigraph">
+    <p>調査によれば、AI が生成するコードの 45〜56% に何らかのセキュリティ上の問題が含まれている。</p>
+    <p>AI は「それらしく動くコード」を瞬時に出力するが、そのコードが安全かどうかを判断する責任は、依頼した人間にある。</p>
+  </div>
+
+  <div class="callout danger">
+    <div class="callout-title">&#x1F6A8; 実被害事例 — AI コーディング環境経由のアカウント乗っ取り</div>
+    <p class="text-sm" style="margin-bottom:0;">
+      AI コーディング環境経由で攻撃を受け、Google Ads 管理アカウントが乗っ取られ
+      <strong>8桁後半（数千万円規模）</strong>の金銭被害が発生した事例が報告されています（2025年）。
+      攻撃の入口は「プロジェクト設定ファイルへの悪意ある指示の混入」でした。
+      「コードが動いていたから安全」という油断と、AI エージェントへの過信が被害を拡大させます。
+      AI が扱う認証情報と権限の管理は、コードの品質と同等かそれ以上に重要です。
+    </p>
+  </div>
+
+  <p>バイブコーディングの最大の魅力は「速さ」です。しかし速さは同時に、<strong>セキュリティを検討する時間を奪う</strong>ことでもあります。従来の開発では、コードレビューやテスト工程でセキュリティの問題が発見される機会がありました。AIに「全部お任せ」するスタイルでは、その安全網が失われます。</p>
+
+  <p>Veracode の調査では、GitHub Copilot が生成するコードの <strong>40%</strong> にセキュリティ脆弱性が含まれていました。フィルタリング後でも <strong>36%</strong> に問題が残っています。また、人間が書くコードと比較して、AI 生成コードの SQL インジェクション発生率は <strong>2.74 倍</strong>高いことが報告されています。</p>
+
+  <p>これは AI が「悪い」のではなく、AI が<strong>正常に動くことを最優先にコードを生成する</strong>ためです。セキュリティは「動くかどうか」とは別の次元の品質であり、明示的に要求しなければ考慮されません。</p>
+
+  <div class="callout warn">
+    <div class="callout-title">&#x26A0; このガイドの位置づけ</div>
+    <p class="text-sm" style="margin-bottom:0;">
+      本ガイドは <a href="https://hirokioshiro.github.io/vibe_coding_preflight_guide/">Vibe Coding Preflight Guide</a>（要件定義・設計・品質の上流工程）の兄弟ガイドです。Preflight Guide が「何を・どう作るか」の整理を扱うのに対し、本ガイドは「安全に作る・安全に使う」ための知識に特化しています。セキュリティの専門家になることが目的ではなく、<strong>「こういうリスクが存在する」と知っているだけで、致命的な事故を防げる</strong> — その最低限の知識地図を提供します。
+    </p>
+  </div>
+
+  <div class="deepdive">
+    <div class="dd-label">&#x1F916; AI DEEP DIVE PROMPT</div>
+    <div class="dd-title">セキュリティの全体像を理解したいとき</div>
+    <code>私はプログラミング初学者で、バイブコーディング（AIにコードを書かせる開発手法）でWebアプリを作ろうとしています。
+AIが生成するコードのセキュリティリスクについて、以下の観点で教えてください：
+1. AI生成コードに特有のセキュリティリスクとは何か（従来の手書きコードとの違い）
+2. OWASP Top 10の中で、バイブコーディングで特に注意すべき項目はどれか
+3. 「セキュリティを考慮したプロンプト」の書き方の具体例を3つ
+4. 非エンジニアでも実践できるセキュリティ対策の優先順位リスト
+日本語で、専門用語には初出時に簡単な説明を添えてください。</code>
+  </div>
+</section>
+
+<!-- ═══════════════ Section 01: AI Code Risk ═══════════════ -->
+<section class="section" id="ai-risk">
+  <div class="section-num">SECTION 01</div>
+  <h2>AIが生成するコードのリスクを知る</h2>
+  <p class="section-subtitle">AI は「動くコード」を書くのは得意だが、「安全なコード」を書くとは限らない</p>
+
+  <p>AI コード生成ツール（GitHub Copilot、Cursor、Claude Code など）は、大量のオープンソースコードを学習しています。その学習データには脆弱なコードも含まれており、状況によっては危険なパターンを「正解」として出力します。</p>
+
+  <h3>AI が生成しやすい 3 大脆弱性</h3>
+
+  <div class="card-grid">
+    <div class="card red">
+      <div class="card-icon">&#x1F4A5;</div>
+      <div class="card-title red-t">SQL インジェクション</div>
+      <div class="card-desc">
+        AI が文字列連結で SQL 文を組み立てるコードを生成することがある。
+        発生率は人間の <strong>2.74 倍</strong>。
+        攻撃者がフォーム入力からデータベースを操作・窃取できる。
+      </div>
+    </div>
+    <div class="card orange">
+      <div class="card-icon">&#x1F310;</div>
+      <div class="card-title orange-t">XSS（クロスサイトスクリプティング）</div>
+      <div class="card-desc">
+        ユーザー入力をエスケープせずに HTML に埋め込むコードが生成されうる。
+        攻撃者が他のユーザーのブラウザで悪意あるスクリプトを実行できる。
+      </div>
+    </div>
+    <div class="card purple">
+      <div class="card-icon">&#x1F511;</div>
+      <div class="card-title purple-t">認証・認可の欠陥</div>
+      <div class="card-desc">
+        画面ごとに認証チェックが一貫しない、管理者権限の検証が抜ける。
+        ログインしていないユーザーが保護されたデータにアクセスできてしまう。
+      </div>
+    </div>
+  </div>
+
+  <h3>OWASP Top 10 for LLM Applications 2025 — 主要リスク</h3>
+  <p>OWASP（Open Worldwide Application Security Project）は、AI/LLM アプリケーション固有のセキュリティリスクを 2025 年版として再定義しました。</p>
+
+  <table class="ref-table">
+    <thead>
+      <tr><th>#</th><th>リスク名</th><th>バイブコーディングとの関連</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>1</td>
+        <td><span class="tag tag-ai">Prompt Injection</span></td>
+        <td>悪意ある入力でAIの動作を乗っ取る。AIエージェントが不正な操作を実行する可能性</td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td><span class="tag tag-ai">Sensitive Info Disclosure</span></td>
+        <td>AIに機密情報を入力すると、学習データやログに残り外部に露出するリスク</td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td><span class="tag tag-ai">Supply Chain</span></td>
+        <td>AIが推奨するパッケージが悪意あるものや存在しないものである可能性</td>
+      </tr>
+      <tr>
+        <td>5</td>
+        <td><span class="tag tag-ai">Improper Output Handling</span></td>
+        <td>AI出力をそのまま使用すると、XSSやSQLiの脆弱性がアプリに混入</td>
+      </tr>
+      <tr>
+        <td>6</td>
+        <td><span class="tag tag-ai">Excessive Agency</span></td>
+        <td>AIエージェントに過度な権限を与えると、意図しない操作（ファイル削除、データ送信）を実行</td>
+      </tr>
+      <tr>
+        <td>9</td>
+        <td><span class="tag tag-ai">Overreliance</span></td>
+        <td>AI出力を無批判に信頼し、レビューせずにデプロイすること自体がリスク</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout warn">
+    <div class="callout-title">&#x26A0; ツール自体の脆弱性にも注意</div>
+    <p class="text-sm" style="margin-bottom:0;">
+      2025 年 12 月、GitHub Copilot・Cursor・Claude Code 等の AI コーディングツールから合計 <strong>30 以上の脆弱性</strong>（24 件の CVE）が発見されました。特に Cursor では MCP 関連の脆弱性（CVE-2025-54135, CVSS 8.5 High）により、プロンプトインジェクション経由でのリモートコード実行が可能でした。ツール自体を常に最新版に更新することが重要です。
+    </p>
+  </div>
+
+  <div class="deepdive">
+    <div class="dd-label">&#x1F916; AI DEEP DIVE PROMPT</div>
+    <div class="dd-title">自分のプロジェクトでAI生成コードのリスクを評価したいとき</div>
+    <code>私はバイブコーディングで [あなたのプロジェクトの説明] を作っています。
+
+AIが生成したコードについて、以下のセキュリティチェックを手伝ってください：
+1. SQLインジェクションの可能性がある箇所の特定（文字列連結でクエリを組み立てていないか）
+2. XSSの可能性がある箇所の特定（ユーザー入力をエスケープせずに表示していないか）
+3. 認証・認可チェックの一貫性（すべての保護ページで認証が行われているか）
+4. APIキーやシークレットがコードにハードコードされていないか
+
+各問題について「どこが危険か」「なぜ危険か」「どう修正すべきか」を具体的に説明してください。</code>
+  </div>
+</section>
+
+<!-- ═══════════════ Section 02: Secrets ═══════════════ -->
+<section class="section" id="secrets">
+  <div class="section-num">SECTION 02</div>
+  <h2>シークレット管理の基本</h2>
+  <p class="section-subtitle">API キーや認証情報の管理は、セキュリティの最も基本的で最も重要な防御線</p>
+
+  <p>API キー、データベースのパスワード、OAuth のシークレット — これらの認証情報（シークレット）は、システムの「鍵」です。この鍵が漏れると、攻撃者にシステムへの完全なアクセスを与えることになります。</p>
+
+  <h3>シークレット管理の 3 つの方法</h3>
+
+  <div class="card-grid">
+    <div class="card teal">
+      <div class="card-icon">&#x1F4C4;</div>
+      <div class="card-title teal-t">.env ファイル</div>
+      <div class="card-desc">
+        最も基本的な方法。プロジェクトルートに <code>.env</code> ファイルを作成し、環境変数として定義。
+        <strong>.gitignore に必ず追加</strong>して、Git にコミットしない。
+      </div>
+    </div>
+    <div class="card blue">
+      <div class="card-icon">&#x2699;&#xFE0F;</div>
+      <div class="card-title blue-t">環境変数（OS レベル）</div>
+      <div class="card-desc">
+        OS やホスティングサービスの環境変数設定を利用。
+        Vercel、Netlify、Render 等のプラットフォームには専用の設定画面がある。
+      </div>
+    </div>
+    <div class="card purple">
+      <div class="card-icon">&#x1F512;</div>
+      <div class="card-title purple-t">シークレット管理サービス</div>
+      <div class="card-desc">
+        AWS Secrets Manager、GitHub Secrets、1Password CLI など。
+        大規模・チーム開発での利用に適している。暗号化とアクセス制御を提供。
+      </div>
+    </div>
+  </div>
+
+  <h3>絶対にやってはいけないこと</h3>
+
+  <table class="ref-table">
+    <thead>
+      <tr><th>やってはいけないこと</th><th>なぜ危険か</th><th>正しい方法</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="tag tag-sec">コードに直書き</span></td>
+        <td>Git 履歴に残り、削除しても復元可能。公開リポジトリなら即座に漏洩</td>
+        <td><code>.env</code> ファイルに分離し、<code>process.env.API_KEY</code> で参照</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag-sec">.env を Git にコミット</span></td>
+        <td><code>.gitignore</code> に追加し忘れると、push した瞬間に全世界に公開される</td>
+        <td>プロジェクト作成直後に <code>.gitignore</code> を設定</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag-sec">フロントエンドに埋め込み</span></td>
+        <td>ブラウザの開発者ツールで誰でも閲覧可能。JavaScript のソースに含まれる</td>
+        <td>バックエンド経由でAPIを呼び出す。フロントにキーを渡さない</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag-sec">チャットやメールで共有</span></td>
+        <td>履歴が残る。転送される。スクリーンショットを撮られる</td>
+        <td>シークレット管理サービスや暗号化された共有方法を使う</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag-sec">ログ・標準出力に出力</span></td>
+        <td>デバッグ目的で <code>print</code> / <code>console.log</code> した認証情報が CI/CD ログや Git 履歴に永続化する。AI コーディングツールのログにも残ることがある</td>
+        <td>ログ出力前にマスク処理（<code>***</code> 等で置換）。本番環境のログレベルは INFO 以上に制限</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>.gitignore の必須パターン</h3>
+
+  <div class="code-block">
+    <span class="filename">.gitignore</span>
+    <pre><span class="comment"># 環境変数・シークレット</span>
+.env
+.env.*
+.env.local
+.env.production
+!.env.example
+
+<span class="comment"># 依存関係（再インストール可能）</span>
+node_modules/
+vendor/
+__pycache__/
+venv/
+
+<span class="comment"># IDE・OS</span>
+.DS_Store
+.vscode/settings.json
+.idea/
+
+<span class="comment"># ビルド成果物</span>
+dist/
+build/
+*.log</pre>
+  </div>
+
+  <div class="callout danger">
+    <div class="callout-title">&#x1F6A8; シークレットが漏洩した場合の緊急対処</div>
+    <p class="text-sm" style="margin-bottom:0;">
+      <strong>1. 即座にキーを無効化</strong> — API プロバイダのダッシュボードでキーを revoke（取り消し）する。<br>
+      <strong>2. 新しいキーを発行</strong> — 古いキーは二度と使わない。<br>
+      <strong>3. Git 履歴から削除</strong> — <code>git filter-branch</code> や BFG Repo-Cleaner で履歴を書き換える。<br>
+      <strong>4. 影響範囲の調査</strong> — 不正利用がなかったかログを確認。課金が発生していないかチェック。<br>
+      時間との勝負です。GitHub に push した API キーは <strong>数秒以内</strong>にボットにスキャンされると報告されています。
+    </p>
+  </div>
+
+  <div class="deepdive">
+    <div class="dd-label">&#x1F916; AI DEEP DIVE PROMPT</div>
+    <div class="dd-title">プロジェクトのシークレット管理を設計したいとき</div>
+    <code>以下のプロジェクトのシークレット管理を設計してください。
+
+プロジェクト：[あなたのプロジェクトの説明]
+使用する外部サービス：[例：OpenAI API、Supabase、Stripe など]
+ホスティング：[例：Vercel、Netlify、自前サーバーなど]
+
+以下を具体的に提案してください：
+1. .env ファイルの設計（どの変数名でどのキーを管理するか）
+2. .env.example のテンプレート（キー値は含めず変数名のみ）
+3. .gitignore に追加すべきパターン
+4. ホスティング環境での環境変数設定手順
+5. フロントエンドに絶対に渡してはいけない情報の一覧
+6. チーム開発の場合のシークレット共有方法</code>
+  </div>
+</section>
+
+<!-- ═══════════════ Section 03: AI Input ═══════════════ -->
+<section class="section" id="ai-input">
+  <div class="section-num">SECTION 03</div>
+  <h2>AIに送ってはいけない情報</h2>
+  <p class="section-subtitle">AIサービスへの入力は「外部への送信」である — その意識が防御の第一歩</p>
+
+  <p>AI コーディングツールを使うということは、あなたのコードや入力をクラウド上の AI サービスに送信するということです。多くのツールはデータの学習利用をオプトアウトできますが、<strong>送信した時点でリスクが発生する</strong>ことを認識する必要があります。</p>
+
+  <h3>情報分類マトリクス</h3>
+
+  <table class="ref-table">
+    <thead>
+      <tr><th>分類</th><th>具体例</th><th>AIへの送信</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td style="color:var(--green);font-weight:500;">送ってよい</td>
+        <td>一般的なロジック、UI コンポーネント、公開情報に基づくコード</td>
+        <td>問題なし</td>
+      </tr>
+      <tr>
+        <td style="color:var(--yellow);font-weight:500;">注意が必要</td>
+        <td>社内の業務ロジック、未公開の仕様書、独自アルゴリズム</td>
+        <td>利用規約を確認し、学習利用のオプトアウト設定を行った上で送信</td>
+      </tr>
+      <tr>
+        <td style="color:var(--red);font-weight:500;">絶対に送らない</td>
+        <td>API キー、パスワード、個人情報、顧客データ、医療・金融情報</td>
+        <td>いかなる場合も AI に入力しない。ダミーデータに置き換える</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>実際に起きた情報漏洩事例</h3>
+
+  <div class="card-grid">
+    <div class="card red">
+      <div class="card-icon">&#x1F4F1;</div>
+      <div class="card-title red-t">大手電機メーカーの事例</div>
+      <div class="card-desc">
+        開発中の製品ソースコード（機密情報）を ChatGPT に入力し、コード修正を依頼。
+        社内の機密コードが外部サービスに送信され、流出リスクが発生。
+      </div>
+    </div>
+    <div class="card orange">
+      <div class="card-icon">&#x1F4CA;</div>
+      <div class="card-title orange-t">RAG導入企業の事例</div>
+      <div class="card-desc">
+        プロンプトインジェクション攻撃により、AI が接続しているデータベースの全レコードが抽出された。
+        社内文書の検索システムが攻撃の入口になった。
+      </div>
+    </div>
+  </div>
+
+  <div class="callout info">
+    <div class="callout-title">&#x1F4A1; 実践的な防御策</div>
+    <p class="text-sm" style="margin-bottom:0;">
+      <strong>1. ダミーデータの活用</strong> — 実際のAPIキーの代わりに <code>sk-dummy-key-12345</code>、実際のメールの代わりに <code>test@example.com</code> を使う。<br>
+      <strong>2. AI サービスの設定確認</strong> — ChatGPT なら「データコントロール」設定でモデル学習への利用をオフにする。GitHub Copilot なら「コードスニペットの学習利用」をオフにする。<br>
+      <strong>3. ローカル実行の検討</strong> — 機密性の高いプロジェクトでは、ローカルで動作する AI モデル（Ollama 等）の利用を検討する。
+    </p>
+  </div>
+
+  <div class="deepdive">
+    <div class="dd-label">&#x1F916; AI DEEP DIVE PROMPT</div>
+    <div class="dd-title">組織のAI利用ガイドラインを策定したいとき</div>
+    <code>私の組織でAIコーディングツール（GitHub Copilot / Cursor / Claude Code など）の利用ガイドラインを策定したいです。
+
+組織の概要：[組織の種類・規模]
+扱うデータ：[どんなデータを扱うか]
+現在の利用状況：[どのツールをどの程度使っているか]
+
+以下の項目を含むガイドラインのドラフトを作成してください：
+1. AIツールへの入力禁止情報リスト（具体的なカテゴリと例）
+2. 利用が許可される用途と条件
+3. 各ツールの推奨セキュリティ設定（学習利用オプトアウト等）
+4. インシデント発生時の対応フロー
+5. 定期的なレビュー・更新の方針</code>
+  </div>
+</section>
+
+<!-- ═══════════════ Section 04: Supply Chain ═══════════════ -->
+<section class="section" id="supply-chain">
+  <div class="section-num">SECTION 04</div>
+  <h2>サプライチェーンを守る</h2>
+  <p class="section-subtitle">AIが「自信満々に推奨する」パッケージが、実在しない・悪意がある可能性</p>
+
+  <p>ソフトウェア開発では、npm（JavaScript）や pip（Python）などのパッケージマネージャを通じて外部ライブラリを利用します。AI はしばしばこれらのパッケージを推奨しますが、その推奨には深刻なリスクが潜んでいます。</p>
+
+  <h3>「パッケージ幻覚」の仕組み</h3>
+
+  <div class="concept-flow">
+    <div class="concept-box">
+      <div class="label">STEP 1</div>
+      <div class="name">AI が推奨</div>
+      <div class="desc">「〇〇パッケージを使いましょう」</div>
+    </div>
+    <div class="concept-arrow">&rarr;</div>
+    <div class="concept-box" style="border-color: var(--red); box-shadow: 0 0 0 2px rgba(153,27,27,0.1);">
+      <div class="label" style="color:var(--red);">STEP 2</div>
+      <div class="name" style="color:var(--red);">実在しない</div>
+      <div class="desc">そのパッケージは AI のハルシネーション</div>
+    </div>
+    <div class="concept-arrow">&rarr;</div>
+    <div class="concept-box" style="border-color: var(--red); box-shadow: 0 0 0 2px rgba(153,27,27,0.1);">
+      <div class="label" style="color:var(--red);">STEP 3</div>
+      <div class="name" style="color:var(--red);">攻撃者が公開</div>
+      <div class="desc">攻撃者がその名前で悪意あるパッケージを公開</div>
+    </div>
+  </div>
+
+  <p>調査によると、AI が生成したコード 576,000 件のうち約 <strong>20%</strong> で、推奨されたパッケージが実在しませんでした。この現象を悪用した攻撃は「スロップスクワッティング」と呼ばれます。</p>
+
+  <h3>3 つのサプライチェーンリスク</h3>
+
+  <div class="card-grid">
+    <div class="card red">
+      <div class="card-icon">&#x1F47B;</div>
+      <div class="card-title red-t">パッケージ幻覚</div>
+      <div class="card-desc">
+        AI が実在しないパッケージ名を生成。
+        開発者がインストールしようとしてエラーになるか、攻撃者が用意した偽パッケージを掴む。
+      </div>
+    </div>
+    <div class="card orange">
+      <div class="card-icon">&#x1F3AD;</div>
+      <div class="card-title orange-t">スロップスクワッティング</div>
+      <div class="card-desc">
+        AI がよく推奨する「存在しないパッケージ名」を先回りして登録し、マルウェアを仕込む攻撃。
+        2025年に「sw-cur」「aiide-cur」等で 3,200 件以上ダウンロードされた実例あり。
+      </div>
+    </div>
+    <div class="card purple">
+      <div class="card-icon">&#x1F41B;</div>
+      <div class="card-title purple-t">依存関係汚染</div>
+      <div class="card-desc">
+        正規パッケージのメンテナーアカウントが乗っ取られ、悪意あるアップデートが配信される。
+        <code>postinstall</code> スクリプトで認証情報を窃取するケースも。
+      </div>
+    </div>
+  </div>
+
+  <h3>パッケージを安全に利用するためのチェックリスト</h3>
+
+  <table class="ref-table">
+    <thead>
+      <tr><th>確認項目</th><th>方法</th><th>危険信号</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>パッケージ名の正確性</td>
+        <td>npm / PyPI の公式サイトで検索</td>
+        <td>検索結果がない、または似た名前の別パッケージが表示される</td>
+      </tr>
+      <tr>
+        <td>ダウンロード数</td>
+        <td>npm なら weekly downloads を確認</td>
+        <td>極端に少ない（新規パッケージの場合は他の指標も確認）</td>
+      </tr>
+      <tr>
+        <td>メンテナー情報</td>
+        <td>GitHub リポジトリのプロフィール・コミット履歴</td>
+        <td>匿名、コミット履歴が浅い、突然の大量更新</td>
+      </tr>
+      <tr>
+        <td>最終更新日</td>
+        <td>パッケージレジストリで確認</td>
+        <td>長期放置後の突然の更新（アカウント乗っ取りの可能性）</td>
+      </tr>
+      <tr>
+        <td>postinstall スクリプト</td>
+        <td><code>package.json</code> の <code>scripts</code> 項目を確認</td>
+        <td>不明な外部URLへの通信、環境変数の読み取り</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="deepdive">
+    <div class="dd-label">&#x1F916; AI DEEP DIVE PROMPT</div>
+    <div class="dd-title">依存関係のセキュリティ監査をしたいとき</div>
+    <code>以下のプロジェクトの依存関係（パッケージ）のセキュリティ監査を手伝ってください。
+
+使用言語：[JavaScript/Python/etc.]
+パッケージマネージャ：[npm/pip/etc.]
+主要な依存パッケージ：[package.json や requirements.txt の内容]
+
+以下を確認してください：
+1. 各パッケージが公式・信頼できるものかの確認
+2. 既知の脆弱性がないか（npm audit / pip-audit の結果解説）
+3. 不要な依存関係の特定（使っていないパッケージ）
+4. バージョン固定の推奨（ロックファイルの適切な管理）
+5. postinstall スクリプトに不審な処理がないか</code>
+  </div>
+</section>
+
+<!-- ═══════════════ Section 05: MCP ═══════════════ -->
+<section class="section" id="mcp">
+  <div class="section-num">SECTION 05</div>
+  <h2>MCPサーバーのセキュリティ</h2>
+  <p class="section-subtitle">AI エージェントに「ツールを使う能力」を与えることの、便利さと危険性</p>
+
+  <p>MCP（Model Context Protocol）は、AI にデータベースアクセス、ファイル操作、API 呼び出しなどの「ツール」を提供する仕組みです。Claude Code や Cursor で広く使われていますが、AI に強力な権限を与えることは、セキュリティリスクも拡大させます。</p>
+
+  <h3>MCPの仕組みと攻撃面</h3>
+
+  <div class="concept-flow">
+    <div class="concept-box">
+      <div class="label">USER</div>
+      <div class="name">あなた</div>
+      <div class="desc">プロンプトで指示</div>
+    </div>
+    <div class="concept-arrow">&rarr;</div>
+    <div class="concept-box" style="border-color: var(--accent);">
+      <div class="label" style="color:var(--accent);">AI</div>
+      <div class="name" style="color:var(--accent);">LLM</div>
+      <div class="desc">ツール呼び出しを判断</div>
+    </div>
+    <div class="concept-arrow">&rarr;</div>
+    <div class="concept-box" style="border-color: var(--red); box-shadow: 0 0 0 2px rgba(153,27,27,0.1);">
+      <div class="label" style="color:var(--red);">MCP SERVER</div>
+      <div class="name" style="color:var(--red);">ツール実行</div>
+      <div class="desc">DB操作, ファイル操作, API呼出</div>
+    </div>
+  </div>
+
+  <h3>MCPの主要なセキュリティリスク</h3>
+
+  <div class="card-grid">
+    <div class="card red">
+      <div class="card-icon">&#x2620;&#xFE0F;</div>
+      <div class="card-title red-t">Tool Poisoning 攻撃</div>
+      <div class="card-desc">
+        MCP ツールの説明文に悪意あるプロンプトを埋め込み、AI の動作を操作する。
+        ツール説明は通常ユーザーに見えないため、気づかないうちに攻撃が成立する。
+      </div>
+    </div>
+    <div class="card orange">
+      <div class="card-icon">&#x1F4BE;</div>
+      <div class="card-title orange-t">SQL インジェクションの増幅</div>
+      <div class="card-desc">
+        MCP の公式 SQLite 参考実装にはユーザー入力がサニタイズされない脆弱性がある。
+        この参考コードは 5,000 回以上フォークされ、多くの環境で未修正のまま稼働中。
+      </div>
+    </div>
+    <div class="card purple">
+      <div class="card-icon">&#x1F6E1;&#xFE0F;</div>
+      <div class="card-title purple-t">権限昇格</div>
+      <div class="card-desc">
+        一度承認された MCP 設定が後から改変されても再承認が不要となる挙動があり、
+        攻撃者がユーザーの追加承認なしに高権限の操作を実行できる可能性。
+      </div>
+    </div>
+    <div class="card orange">
+      <div class="card-icon">&#x1F576;&#xFE0F;</div>
+      <div class="card-title orange-t">間接プロンプトインジェクション</div>
+      <div class="card-desc">
+        Web ページ上に CSS で視覚的に非表示にしたテキストを埋め込み、
+        <strong>人間には見えないが AI には読める指示</strong>を実行させる攻撃。
+        Playwright 等のブラウジング系 MCP ツールを使うと特に危険。
+        ユーザーが指示していない操作（ファイル送信・設定変更）を AI が実行する可能性がある。
+      </div>
+    </div>
+    <div class="card red">
+      <div class="card-icon">&#x1F4E6;</div>
+      <div class="card-title red-t">プロンプトサプライチェーン攻撃</div>
+      <div class="card-desc">
+        SNS やコミュニティで共有される <code>CLAUDE.md</code>・MCP 設定ファイルに
+        悪意ある指示を混入させる攻撃。
+        <strong>CVE-2025-59536</strong>: プロジェクト内設定ファイル経由で MCP 承認ダイアログを迂回。
+        外部から入手した設定ファイルを無審査でコピーすることで被害が発生する。
+      </div>
+    </div>
+  </div>
+
+  <h3>安全なMCP運用のためのチェックポイント</h3>
+
+  <table class="ref-table">
+    <thead>
+      <tr><th>対策</th><th>詳細</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>最小権限の原則</strong></td>
+        <td>MCP サーバーには必要最小限のアクセス権のみ付与。読み取り専用で済むなら書き込み権限を与えない</td>
+      </tr>
+      <tr>
+        <td><strong>パラメータ化クエリ</strong></td>
+        <td>MCP サーバー内の DB アクセスでは、f文字列ではなくプレースホルダを使用</td>
+      </tr>
+      <tr>
+        <td><strong>ツール呼び出しの確認</strong></td>
+        <td>破壊的な操作（削除、送信）は実行前にユーザー確認を必須にする</td>
+      </tr>
+      <tr>
+        <td><strong>公式サーバーの利用</strong></td>
+        <td>信頼できるソースからの MCP サーバーのみ使用。野良サーバーは脆弱性のリスクが高い</td>
+      </tr>
+      <tr>
+        <td><strong>コンテナ化</strong></td>
+        <td>Docker や Deno の権限設定で、MCP サーバーのアクセス範囲を制限</td>
+      </tr>
+      <tr>
+        <td><strong>定期的な更新</strong></td>
+        <td>MCP サーバーとクライアント（Cursor, Claude Code 等）を常に最新版に保つ</td>
+      </tr>
+      <tr>
+        <td><strong>外部配布設定ファイルの検証</strong></td>
+        <td>SNS・コミュニティから入手した <code>CLAUDE.md</code>・MCP 設定ファイルは、<strong>base64 エンコード文字列・環境変数の参照・<code>ANTHROPIC_BASE_URL</code> の書き換え</strong>がないかを確認してから使用する。これらはプロンプトサプライチェーン攻撃の典型的な兆候</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="deepdive">
+    <div class="dd-label">&#x1F916; AI DEEP DIVE PROMPT</div>
+    <div class="dd-title">MCP導入時のセキュリティを評価したいとき</div>
+    <code>以下のMCP（Model Context Protocol）サーバーの導入を検討しています。セキュリティ評価を手伝ってください。
+
+導入予定のMCPサーバー：[サーバー名・リポジトリURL]
+利用目的：[何のために使うか]
+接続先：[データベース、API、ファイルシステムなど]
+
+以下の観点で評価してください：
+1. このMCPサーバーに付与される権限の範囲と、最小権限の原則に基づく推奨設定
+2. Tool Poisoning攻撃への耐性（ツール説明文に不審な内容がないか）
+3. 入力値のサニタイズ状況（SQLインジェクション等の脆弱性がないか）
+4. 認証情報の管理方法（平文保存されていないか）
+5. 推奨されるセキュリティ設定（環境変数、権限制限、コンテナ化）</code>
+  </div>
+</section>
+
+<!-- ═══════════════ Section 06: Dev Environment ═══════════════ -->
+<section class="section" id="dev-env">
+  <div class="section-num">SECTION 06</div>
+  <h2>開発環境のセキュリティ設定</h2>
+  <p class="section-subtitle">ツールの設定一つで、事故を未然に防げる — 「安全な環境」を先に整える</p>
+
+  <p>セキュリティ事故の多くは、コードの問題ではなく<strong>環境設定の問題</strong>から発生します。開発を始める前に環境を整えることは、シートベルトを締めるのと同じです。</p>
+
+  <h3>4 つの防御レイヤー</h3>
+
+  <div class="card-grid">
+    <div class="card teal">
+      <div class="card-icon">&#x1F6E1;&#xFE0F;</div>
+      <div class="card-title teal-t">パーミッション設定</div>
+      <div class="card-desc">
+        AI ツールの操作権限を制限する。Claude Code なら <code>settings.json</code> で危険なコマンド（<code>rm -rf</code>、<code>git push --force</code>）を deny に設定。
+        Cursor なら MCP の権限設定を確認。
+      </div>
+    </div>
+    <div class="card blue">
+      <div class="card-icon">&#x1F6D1;</div>
+      <div class="card-title blue-t">pre-commit フック</div>
+      <div class="card-desc">
+        Git コミット前に自動でチェックを実行。<strong>gitleaks</strong> でシークレットの混入を検知。
+        コミットにシークレットが含まれていれば自動でブロックされる。
+      </div>
+    </div>
+    <div class="card green">
+      <div class="card-icon">&#x2699;&#xFE0F;</div>
+      <div class="card-title green-t">CI/CD セキュリティ</div>
+      <div class="card-desc">
+        GitHub Actions 等で自動セキュリティチェック。<code>npm audit</code>、SAST（静的解析）ツール、依存関係スキャンを自動実行。
+      </div>
+    </div>
+    <div class="card purple">
+      <div class="card-icon">&#x1F4E6;</div>
+      <div class="card-title purple-t">サンドボックス化</div>
+      <div class="card-desc">
+        Docker コンテナや Deno の権限システムで、実行環境を隔離。
+        万が一悪意あるコードが実行されても、ホストシステムへの影響を最小限に抑える。
+      </div>
+    </div>
+  </div>
+
+  <h3>ツール別の推奨セキュリティ設定</h3>
+
+  <table class="ref-table">
+    <thead>
+      <tr><th>ツール</th><th>設定項目</th><th>推奨設定</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Claude Code</strong></td>
+        <td>パーミッション設定</td>
+        <td>認証情報ファイル・破壊コマンドを deny。外部通信・Git 強制操作を ask</td>
+      </tr>
+      <tr>
+        <td><strong>Cursor</strong></td>
+        <td>MCP サーバー設定</td>
+        <td>ツール呼び出し時の確認を有効化。信頼できるサーバーのみ登録</td>
+      </tr>
+      <tr>
+        <td><strong>GitHub Copilot</strong></td>
+        <td>学習利用設定</td>
+        <td>「コードスニペットの学習利用」をオフ。組織設定でポリシーを統一</td>
+      </tr>
+      <tr>
+        <td><strong>Git（共通）</strong></td>
+        <td>pre-commit フック</td>
+        <td>gitleaks をインストールし、シークレット検知を自動化</td>
+      </tr>
+      <tr>
+        <td><strong>VS Code（共通）</strong></td>
+        <td>拡張機能</td>
+        <td>信頼できるパブリッシャーの拡張機能のみ使用。未検証の拡張は避ける</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Claude Code settings.json — 推奨セキュリティ設定</h3>
+
+  <p>Claude Code の権限は <code>~/.claude/settings.json</code>（グローバル・全プロジェクト共通）と <code>.claude/settings.local.json</code>（プロジェクト固有）で管理します。評価順序は <strong>deny → ask → allow</strong> の順で、deny が最優先です。</p>
+
+  <div class="callout warn">
+    <div class="callout-title">&#x26A0; まず設定すべき 2 つの最重要フラグ</div>
+    <div class="code-block" style="margin:8px 0 0;">
+      <span class="filename">~/.claude/settings.json</span>
+      <pre>{
+  "enableAllProjectMcpServers": false,
+  "permissions": {
+    "disableBypassPermissionsMode": "disable"
+  }
+}</pre>
+    </div>
+    <p class="text-sm" style="margin-top:8px;margin-bottom:0;">
+      <strong>enableAllProjectMcpServers: false</strong> — プロジェクトの MCP サーバーを自動承認しない。<code>true</code> にすると「見つけたサーバーを何でも実行」する設定になり、攻撃者が仕込んだ MCP サーバーも自動起動する。<br>
+      <strong>disableBypassPermissionsMode: "disable"</strong> — 全権限バイパスモード（<code>--dangerously-skip-permissions</code>）を無効化。これを設定しておくと、悪意ある指示でバイパスモードに切り替えられなくなる。
+    </p>
+  </div>
+
+  <h3 style="margin-top:32px;">deny / allow の設定例（Web アプリ開発向けサンプル）</h3>
+
+  <p>以下は開発効率とセキュリティのバランスを取ったサンプルです。<strong>deny でリスクを遮断しつつ、allow で日常的な開発コマンドを明示的に許可</strong>する「ハイブリッド戦略」です。プロジェクトや環境に合わせて調整してください。</p>
+
+  <div class="code-block">
+    <span class="filename">~/.claude/settings.json — Web アプリ開発向けサンプル</span>
+    <pre>{
+  "enableAllProjectMcpServers": false,
+  "permissions": {
+    "disableBypassPermissionsMode": "disable",
+
+    "deny": [
+      <span class="comment">// ── ネットワーク通信（スクリプト経由の curl 迂回対策含む） ──</span>
+      "Bash(curl *)", "Bash(wget *)",
+      "Bash(nc *)", "Bash(ncat *)", "Bash(telnet *)",
+      "Bash(python3 -c *)", "Bash(python3 -m *)",
+      "Bash(node -e *)", "Bash(node -r *)",
+
+      <span class="comment">// ── 権限昇格・システム操作 ──</span>
+      "Bash(sudo *)", "Bash(su *)",
+
+      <span class="comment">// ── 機密ファイルへのアクセス（コマンド名を問わずパスでブロック） ──</span>
+      "Bash(* .env*)", "Bash(* .env.*)",
+      "Bash(* ~/.ssh/*)", "Bash(* ~/.aws/*)",
+      "Bash(* ~/.npmrc)", "Bash(* ~/.netrc)",
+      "Read(**/.env)", "Read(**/.env.*)",
+
+      <span class="comment">// ── Git 破壊的操作 ──</span>
+      "Bash(git push --force*)", "Bash(git push -f*)",
+      "Bash(git reset --hard*)", "Bash(git clean -f*)",
+      "Bash(git branch -D*)",
+
+      <span class="comment">// ── macOS 固有の危険操作 ──</span>
+      "Bash(osascript *)", "Bash(security *)",
+      "Bash(launchctl *)", "Bash(defaults write *)"
+    ],
+
+    "allow": [
+      <span class="comment">// ── Git 基本操作 ──</span>
+      "Bash(git status)", "Bash(git diff *)",
+      "Bash(git log *)", "Bash(git add *)",
+      "Bash(git commit *)", "Bash(git checkout *)",
+      "Bash(git switch *)", "Bash(git stash *)",
+
+      <span class="comment">// ── GitHub CLI ──</span>
+      "Bash(gh issue *)", "Bash(gh pr *)", "Bash(gh repo *)",
+
+      <span class="comment">// ── パッケージ管理・テスト実行 ──</span>
+      "Bash(npm install *)", "Bash(npm run *)", "Bash(npm test*)",
+      "Bash(pnpm *)", "Bash(yarn *)", "Bash(bun *)",
+      "Bash(pip install *)", "Bash(pip list*)",
+
+      <span class="comment">// ── テキスト処理・ファイル操作（grep等はallow、機密パスはdenyで上書き） ──</span>
+      "Bash(grep *)", "Bash(awk *)", "Bash(sed *)", "Bash(jq *)",
+      "Bash(ls *)", "Bash(find *)", "Bash(echo *)",
+      "Bash(cat *)", "Bash(head *)", "Bash(tail *)",
+
+      <span class="comment">// ── バージョン確認のみ（スクリプト実行モードは deny で遮断） ──</span>
+      "Bash(python3 --version)", "Bash(node --version)",
+      "Bash(npm --version)", "Bash(git --version)"
+    ]
+  }
+}</pre>
+  </div>
+
+  <table class="ref-table" style="margin-top:16px;">
+    <thead>
+      <tr><th>カテゴリ</th><th>deny する理由</th><th>allow する代替</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>curl / wget</strong></td>
+        <td>外部サーバーへのデータ送信・悪意あるスクリプトのダウンロード</td>
+        <td>— （ブラウザや公式 CLI を手動で使う）</td>
+      </tr>
+      <tr>
+        <td><strong>python3 -c / node -e</strong></td>
+        <td>curl を deny しても HTTP 通信が可能。<code>urllib.request</code> や <code>fetch()</code> でバイパスされる</td>
+        <td><code>python3 --version</code>（バージョン確認のみ allow）</td>
+      </tr>
+      <tr>
+        <td><strong>Bash(* ~/.ssh/*)</strong></td>
+        <td>grep等で<code>~/.ssh/id_rsa</code>を読まれることをブロック。コマンド名より<strong>パスで制御</strong>する</td>
+        <td>— （SSH 操作は手動ターミナルで実行）</td>
+      </tr>
+      <tr>
+        <td><strong>git push --force</strong></td>
+        <td>リモートの Git 履歴を破壊。CI/CD 連携時に特に危険</td>
+        <td>通常の <code>git push</code> は allow</td>
+      </tr>
+      <tr>
+        <td><strong>grep / awk / sed</strong></td>
+        <td>deny しない（開発効率に必要）</td>
+        <td>allow したうえで<code>Bash(* ~/.ssh/*)</code> 等の機密パスを deny で上書き</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout info">
+    <div class="callout-title">&#x1F4A1; deny ルールは完璧ではない — 多層防御の一つとして捉える</div>
+    <p class="text-sm" style="margin-bottom:0;">
+      deny ルールは「攻撃コストを上げる抑止力」であり、完全な防御ではありません。AI が deny ルールを迂回する手段はゼロではなく（<a href="https://github.com/anthropics/claude-code/issues/8961" target="_blank" rel="noopener noreferrer">Issue #8961</a>）、最終防御線はコンテナ化・ネットワーク隔離・最小権限の原則です。<br>
+      <strong>組織やチームでの統一運用</strong>には、ユーザー設定を上書き不可にできる <code>managed-settings.json</code>（企業向け機能）の利用も検討してください。
+    </p>
+  </div>
+
+  <div class="callout info">
+    <div class="callout-title">&#x1F4A1; gitleaks の導入（最小手順）</div>
+    <p class="text-sm" style="margin-bottom:0;">
+      <strong>1. インストール</strong>: <code>brew install gitleaks</code>（macOS）または GitHub Releases からダウンロード<br>
+      <strong>2. pre-commit フック設定</strong>: <code>.pre-commit-config.yaml</code> に gitleaks の設定を追加<br>
+      <strong>3. 手動スキャン</strong>: <code>gitleaks detect --source .</code> で既存リポジトリをスキャン<br>
+      これだけで、API キーやパスワードのコミットを自動的にブロックできます。
+    </p>
+  </div>
+
+  <div class="deepdive">
+    <div class="dd-label">&#x1F916; AI DEEP DIVE PROMPT</div>
+    <div class="dd-title">開発環境のセキュリティ設定を整備したいとき</div>
+    <code>以下の開発環境のセキュリティ設定を整備したいです。
+
+開発ツール：[例：VS Code + Cursor, Claude Code など]
+バージョン管理：[例：Git + GitHub]
+言語/フレームワーク：[例：Next.js, Python + Flask など]
+OS：[例：macOS, Windows]
+
+以下を具体的な手順で教えてください：
+1. .gitignore のセキュリティ強化（シークレット、一時ファイルの除外）
+2. gitleaks pre-commit フックの導入手順
+3. AIツールのパーミッション設定の推奨値
+4. npm audit / pip-audit の定期実行設定
+5. CI/CDでの自動セキュリティチェック設定（GitHub Actions）
+初心者向けに、コピー&ペーストで設定できるレベルで記述してください。</code>
+  </div>
+</section>
+
+<!-- ═══════════════ Section 07: Code Review ═══════════════ -->
+<section class="section" id="review">
+  <div class="section-num">SECTION 07</div>
+  <h2>AIが生成したコードのレビュー方法</h2>
+  <p class="section-subtitle">AI に書かせたコードを、AI に聞きながらレビューする — そのための観点</p>
+
+  <p>非エンジニアがすべてのコードを理解する必要はありません。しかし、<strong>何を確認すべきか</strong>を知っていれば、AI 自身にレビューを依頼して危険な箇所を発見できます。</p>
+
+  <h3>セキュリティ観点のレビュー 3 大ポイント</h3>
+
+  <div class="card-grid">
+    <div class="card red">
+      <div class="card-icon">&#x1F511;</div>
+      <div class="card-title red-t">認証・認可の確認</div>
+      <div class="card-desc">
+        すべての保護ページで認証チェックが行われているか。
+        管理者専用の操作に権限チェックがあるか。
+        セッション管理が適切か。
+      </div>
+    </div>
+    <div class="card orange">
+      <div class="card-icon">&#x1F50D;</div>
+      <div class="card-title orange-t">入力値の検証</div>
+      <div class="card-desc">
+        ユーザーからの入力に対してバリデーションが行われているか。
+        SQLクエリにパラメータ化クエリが使われているか。
+        ファイルアップロードに制限があるか。
+      </div>
+    </div>
+    <div class="card blue">
+      <div class="card-icon">&#x1F4E4;</div>
+      <div class="card-title blue-t">出力のエスケープ</div>
+      <div class="card-desc">
+        ユーザー入力を HTML に表示する際にエスケープされているか。
+        <code>innerHTML</code> や <code>dangerouslySetInnerHTML</code> が使われていないか。
+        HTTPレスポンスヘッダが適切に設定されているか。
+      </div>
+    </div>
+  </div>
+
+  <h3>セキュリティ観点のコードレビューチェックリスト</h3>
+
+  <table class="ref-table">
+    <thead>
+      <tr><th>カテゴリ</th><th>確認項目</th><th>AIに聞く質問例</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="tag tag-sec">認証</span></td>
+        <td>すべてのAPIエンドポイントに認証チェックがあるか</td>
+        <td>「認証なしでアクセスできるAPIエンドポイントはありますか？」</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag-sec">入力検証</span></td>
+        <td>ユーザー入力がサニタイズされているか</td>
+        <td>「このコードにSQLインジェクションの脆弱性はありますか？」</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag-sec">出力</span></td>
+        <td>動的コンテンツがエスケープされているか</td>
+        <td>「XSS攻撃が可能な箇所はありますか？」</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag-sec">シークレット</span></td>
+        <td>ハードコードされた認証情報がないか</td>
+        <td>「このコードにAPIキーやパスワードが直接書かれている箇所はありますか？」</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag-sec">依存関係</span></td>
+        <td>既知の脆弱性を持つパッケージがないか</td>
+        <td>「使用しているパッケージに既知のセキュリティ脆弱性はありますか？」</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag-sec">エラー処理</span></td>
+        <td>エラーメッセージに内部情報が含まれていないか</td>
+        <td>「エラー時にスタックトレースやDB構造がユーザーに見える箇所はありますか？」</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout info">
+    <div class="callout-title">&#x1F4A1; AI にレビューを依頼するコツ</div>
+    <p class="text-sm" style="margin-bottom:0;">
+      「このコードにセキュリティの問題はありますか？」という漠然とした質問より、上の表にある具体的な質問を一つずつ投げる方が精度が高くなります。<strong>同じ AI に書かせたコードを、別のセッションや別の AI でレビューする</strong>と、バイアスが減って効果的です。
+    </p>
+  </div>
+
+  <div class="deepdive">
+    <div class="dd-label">&#x1F916; AI DEEP DIVE PROMPT</div>
+    <div class="dd-title">AIが書いたコードのセキュリティレビューを依頼したいとき</div>
+    <code>以下のコードについて、IPA「安全なウェブサイトの作り方」とOWASP Top 10に基づくセキュリティレビューをしてください。
+
+[ここにレビュー対象のコードを貼り付ける]
+
+以下の観点で問題がないか確認してください：
+1. SQLインジェクション（パラメータ化クエリを使っているか）
+2. XSS（ユーザー入力のエスケープ）
+3. CSRF（トークンによる対策）
+4. 認証・認可（すべての保護リソースで確認されているか）
+5. シークレット管理（ハードコードされた認証情報がないか）
+6. エラーハンドリング（内部情報の漏洩がないか）
+7. 入力バリデーション（型・長さ・形式の検証）
+
+各問題について「危険度（高/中/低）」「具体的な修正方法」「修正後のコード例」を示してください。</code>
+  </div>
+</section>
+
+<!-- ═══════════════ CHECKLIST ═══════════════ -->
+<section class="section" id="checklist">
+  <div class="section-num">SECURITY CHECKLIST</div>
+  <h2>セキュリティチェックリスト</h2>
+  <p class="section-subtitle">全問に答える必要はない。「この観点が存在する」と知っていること自体が防御になる</p>
+
+  <h3>&#x1F6E1;&#xFE0F; A. 開発開始前 — 環境を安全にする</h3>
+  <ul class="checklist" data-group="before">
+    <li>
+      <span class="q">.gitignore を設定し、.env ファイルが Git 管理対象外になっているか？</span>
+      <span class="hint">プロジェクト作成直後に設定する。後からでは Git 履歴に残るリスクがある</span>
+    </li>
+    <li>
+      <span class="q">API キー・シークレットを環境変数（.env）で管理しているか？</span>
+      <span class="hint">コードへの直書きは最も危険な落とし穴。フロントエンドにも含めない</span>
+    </li>
+    <li>
+      <span class="q">gitleaks 等の pre-commit フックを導入しているか？</span>
+      <span class="hint">シークレットの混入を自動で検知・ブロックする最後の砦</span>
+    </li>
+    <li>
+      <span class="q">AI ツールのパーミッション設定を確認したか？</span>
+      <span class="hint">破壊的コマンド、認証情報ファイルへのアクセスを制限</span>
+    </li>
+    <li>
+      <span class="q">AI ツールの学習利用設定（オプトアウト）を確認したか？</span>
+      <span class="hint">コードが AI の学習データに使われないよう設定</span>
+    </li>
+    <li>
+      <span class="q">MCP サーバーは信頼できるソースから導入しているか？</span>
+      <span class="hint">公式サーバーか、十分にレビューされたものだけを使用</span>
+    </li>
+  </ul>
+
+  <h3>&#x1F4BB; B. コード生成時 — AI の出力を検証する</h3>
+  <ul class="checklist" data-group="during">
+    <li>
+      <span class="q">AI が生成した SQL 文にパラメータ化クエリ（プレースホルダ）を使っているか？</span>
+      <span class="hint">文字列連結でクエリを組み立てていたら、即座に修正を依頼する</span>
+    </li>
+    <li>
+      <span class="q">ユーザー入力を HTML に表示する際、エスケープされているか？</span>
+      <span class="hint">innerHTML や dangerouslySetInnerHTML の使用は特に注意</span>
+    </li>
+    <li>
+      <span class="q">すべての保護ページ・API に認証チェックがあるか？</span>
+      <span class="hint">画面ごとに別々に AI に依頼すると、認証が一貫しないことがある</span>
+    </li>
+    <li>
+      <span class="q">AI が推奨したパッケージが実在し、信頼できるか確認したか？</span>
+      <span class="hint">npm / PyPI の公式サイトで検索し、ダウンロード数・メンテナーを確認</span>
+    </li>
+    <li>
+      <span class="q">エラーメッセージにスタックトレースや内部情報が含まれていないか？</span>
+      <span class="hint">本番環境ではユーザーに表示するエラーメッセージを最小限にする</span>
+    </li>
+    <li>
+      <span class="q">フォーム入力に対するバリデーション（型・長さ・形式の検証）があるか？</span>
+      <span class="hint">フロントエンドだけでなく、バックエンドでも必ず検証する</span>
+    </li>
+    <li>
+      <span class="q">AI に機密情報（実際の API キー、顧客データ）を送信していないか？</span>
+      <span class="hint">ダミーデータに置き換えてから AI に送る</span>
+    </li>
+  </ul>
+
+  <h3>&#x1F680; C. デプロイ前 — 最終確認</h3>
+  <ul class="checklist" data-group="deploy">
+    <li>
+      <span class="q">リポジトリに API キーやパスワードがコミットされていないか？</span>
+      <span class="hint"><code>gitleaks detect --source .</code> でスキャン</span>
+    </li>
+    <li>
+      <span class="q">本番環境で使う環境変数がホスティングサービスに正しく設定されているか？</span>
+      <span class="hint">.env ファイルはデプロイされない。ホスティングの管理画面で設定する</span>
+    </li>
+    <li>
+      <span class="q">HTTPS（SSL/TLS）が有効になっているか？</span>
+      <span class="hint">多くのホスティングでは自動設定されるが、確認は必要</span>
+    </li>
+    <li>
+      <span class="q">エラーページでスタックトレースが表示されない設定になっているか？</span>
+      <span class="hint">開発モードと本番モードの切り替えを確認</span>
+    </li>
+    <li>
+      <span class="q">依存パッケージに既知の脆弱性がないか確認したか？</span>
+      <span class="hint"><code>npm audit</code> / <code>pip-audit</code> を実行</span>
+    </li>
+    <li>
+      <span class="q">不要なAPIエンドポイントやデバッグ機能が無効化されているか？</span>
+      <span class="hint">開発用のテストエンドポイント、デバッグログの出力をオフにする</span>
+    </li>
+    <li>
+      <span class="q">セキュリティヘッダ（CSP, X-Content-Type-Options 等）を設定しているか？</span>
+      <span class="hint">ホスティングやフレームワークの設定で追加できることが多い</span>
+    </li>
+  </ul>
+</section>
+
+<!-- ═══════════════ Keywords ═══════════════ -->
+<section class="section" id="keywords">
+  <div class="section-num">KEYWORD INDEX</div>
+  <h2>用語索引 — AIと深掘りするための入口</h2>
+  <p class="section-subtitle">各用語をクリックすると、AIに質問するためのプロンプトをコピーします</p>
+
+  <h3>AIセキュリティ</h3>
+  <div class="kw-grid">
+    <div class="kw-item" title="悪意ある入力でAIの動作を乗っ取る攻撃">プロンプトインジェクション <span class="kw-en">Prompt Injection</span></div>
+    <div class="kw-item" title="AIが事実と異なる情報を生成すること">ハルシネーション <span class="kw-en">Hallucination</span></div>
+    <div class="kw-item" title="AIの出力を無批判に信頼すること">過度な信頼 <span class="kw-en">Overreliance</span></div>
+    <div class="kw-item" title="AIに過度な権限を与えること">過度な権限付与 <span class="kw-en">Excessive Agency</span></div>
+    <div class="kw-item" title="悪意あるプロンプトをツール説明文に埋め込む攻撃">Tool Poisoning <span class="kw-en">Tool Poisoning</span></div>
+    <div class="kw-item" title="AIが存在しないパッケージ名を推奨する現象">パッケージ幻覚 <span class="kw-en">Package Hallucination</span></div>
+    <div class="kw-item" title="AIの学習データ利用を拒否すること">オプトアウト <span class="kw-en">Opt-out</span></div>
+    <div class="kw-item" title="AIにツールを与える標準プロトコル">MCP <span class="kw-en">Model Context Protocol</span></div>
+    <div class="kw-item" title="Webページの見えない指示でAIを操作する攻撃">間接プロンプトインジェクション <span class="kw-en">Indirect Prompt Injection</span></div>
+    <div class="kw-item" title="共有設定ファイルへの悪意ある指示の混入">プロンプトサプライチェーン攻撃 <span class="kw-en">Prompt Supply Chain Attack</span></div>
+  </div>
+
+  <h3>Webセキュリティ</h3>
+  <div class="kw-grid">
+    <div class="kw-item" title="悪意ある入力でDB操作を乗っ取る攻撃">SQLインジェクション <span class="kw-en">SQL Injection</span></div>
+    <div class="kw-item" title="悪意あるスクリプトを他のユーザーに実行させる攻撃">XSS <span class="kw-en">Cross-Site Scripting</span></div>
+    <div class="kw-item" title="ユーザーに意図しない操作を実行させる攻撃">CSRF <span class="kw-en">Cross-Site Request Forgery</span></div>
+    <div class="kw-item" title="「本人確認」と「権限確認」の区別">認証と認可 <span class="kw-en">AuthN vs AuthZ</span></div>
+    <div class="kw-item" title="入力値の検証">バリデーション <span class="kw-en">Validation</span></div>
+    <div class="kw-item" title="特殊文字を無害な表現に変換すること">エスケープ処理 <span class="kw-en">Escaping</span></div>
+    <div class="kw-item" title="入力値を安全な形に変換すること">サニタイズ <span class="kw-en">Sanitization</span></div>
+    <div class="kw-item" title="SQL文の値をプレースホルダで渡す方式">パラメータ化クエリ <span class="kw-en">Parameterized Query</span></div>
+    <div class="kw-item" title="Webセキュリティ脅威の上位10">OWASP Top 10 <span class="kw-en">OWASP</span></div>
+    <div class="kw-item" title="ブラウザのリソース読み込みを制限するHTTPヘッダ">CSP <span class="kw-en">Content Security Policy</span></div>
+  </div>
+
+  <h3>インフラ・環境設定</h3>
+  <div class="kw-grid">
+    <div class="kw-item" title="環境ごとの設定値を格納するファイル">.env ファイル <span class="kw-en">Environment File</span></div>
+    <div class="kw-item" title="Gitで追跡しないファイルを指定する設定">.gitignore <span class="kw-en">.gitignore</span></div>
+    <div class="kw-item" title="コミット前に自動実行されるスクリプト">pre-commit フック <span class="kw-en">Pre-commit Hook</span></div>
+    <div class="kw-item" title="Gitリポジトリ内のシークレットを検知するツール">gitleaks <span class="kw-en">gitleaks</span></div>
+    <div class="kw-item" title="継続的インテグレーション・デリバリー">CI/CD <span class="kw-en">CI/CD</span></div>
+    <div class="kw-item" title="コードを実行せずに解析する手法">静的解析 <span class="kw-en">SAST</span></div>
+    <div class="kw-item" title="隔離された実行環境">サンドボックス <span class="kw-en">Sandbox</span></div>
+    <div class="kw-item" title="通信を暗号化するプロトコル">HTTPS/TLS <span class="kw-en">HTTPS/TLS</span></div>
+  </div>
+
+  <h3>サプライチェーン</h3>
+  <div class="kw-grid">
+    <div class="kw-item" title="ソフトウェア供給過程を悪用する攻撃">サプライチェーン攻撃 <span class="kw-en">Supply Chain Attack</span></div>
+    <div class="kw-item" title="AIのハルシネーションを利用した偽パッケージ攻撃">スロップスクワッティング <span class="kw-en">Slopsquatting</span></div>
+    <div class="kw-item" title="使用パッケージの脆弱性を検査すること">依存関係監査 <span class="kw-en">Dependency Audit</span></div>
+    <div class="kw-item" title="依存パッケージのバージョンを固定するファイル">ロックファイル <span class="kw-en">Lock File</span></div>
+    <div class="kw-item" title="パッケージ管理ツール">パッケージマネージャ <span class="kw-en">Package Manager</span></div>
+    <div class="kw-item" title="共通脆弱性識別子">CVE <span class="kw-en">Common Vulnerabilities</span></div>
+  </div>
+
+  <div class="deepdive mt-md">
+    <div class="dd-label">&#x1F916; AI DEEP DIVE PROMPT</div>
+    <div class="dd-title">知らない用語について体系的に学びたいとき</div>
+    <code>以下の用語について、バイブコーディング（AIにコードを書かせる開発手法）のセキュリティの文脈で教えてください。
+
+用語：[ここに用語を入れる]
+
+以下の形式で回答してください：
+1. 一言での定義
+2. なぜバイブコーディングで特に重要か（知らないとどんな問題が起きるか）
+3. 具体例：Webアプリ（例：タスク管理ツール）を例にした攻撃シナリオ
+4. 防御策：非エンジニアでも実践できる対策
+5. 関連する概念（この用語を理解すると次に学ぶべき概念）
+
+プログラミング初学者向けに、専門用語の初出時には簡単な説明を添えてください。</code>
+  </div>
+</section>
+
+</main>
+
+<!-- ═══════════════ Footer ═══════════════ -->
+<footer class="footer">
+  <div class="footer-inner">
+    <p><strong>公開情報</strong></p>
+    <p>
+      バージョン: v0.1.0<br>
+      最終更新: 2026-03-05<br>
+      更新方針: 必要時に随時更新（単一ページ運用）
+    </p>
+    <p><strong>参照元</strong></p>
+    <p>
+      OWASP Top 10 for LLM Applications 2025 —
+      <a href="https://genai.owasp.org/resource/owasp-top-10-for-llm-applications-2025/" target="_blank" rel="noopener noreferrer">OWASP GenAI</a><br>
+      OWASP Top 10（Web Applications）—
+      <a href="https://owasp.org/www-project-top-ten/" target="_blank" rel="noopener noreferrer">owasp.org</a><br>
+      IPA「安全なウェブサイトの作り方」—
+      <a href="https://www.ipa.go.jp/security/vuln/websecurity/" target="_blank" rel="noopener noreferrer">IPA Webセキュリティ</a><br>
+      IPA「AI事業者ガイドライン v1.1」—
+      <a href="https://www.meti.go.jp/shingikai/mono_info_service/ai_shakai_jisso/20240419_report.html" target="_blank" rel="noopener noreferrer">経産省</a><br>
+      NIST AI Risk Management Framework —
+      <a href="https://www.nist.gov/itl/ai-risk-management-framework" target="_blank" rel="noopener noreferrer">NIST</a><br>
+      徳丸浩「安全なWebアプリケーションの作り方 第2版」（SBクリエイティブ, 2018）
+    </p>
+    <p style="margin-top:12px;">
+      <strong>関連ガイド</strong><br>
+      <a href="https://hirokioshiro.github.io/vibe_coding_preflight_guide/">&#x1F9ED; Vibe Coding Preflight Guide — コードを書く前に考えるべきこと</a>
+    </p>
+    <p style="margin-top:16px;">
+      本ガイドは、バイブコーディング・AIエージェント時代において非エンジニアが最低限知るべきセキュリティ知識を整理した学習リソースです。
+      内容はOWASP、IPA公開資料、および一般的なセキュリティエンジニアリングの知識体系に基づいています。
+    </p>
+  </div>
+</footer>
+<script src="assets/js/main.js" defer></script>
+</body>
+</html>
